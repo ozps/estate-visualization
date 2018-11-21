@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Contour</title>
+    <style>
+ 		body {
+			font-family: Helvetica;
+		}
+		h1 {
+			color: orange;
+			text-align: center;
+			font-size:35px;
+		}
+		button {
+			font-size: 15px;
+		}
+		section {
+			font-family: Helvetica;
+			color: darkblue;
+			font-size:25px;
+			font-weight: bold;
+			display:inline-block;
+		}
+		div {
+			font-family: Helvetica;
+			color: darkblue;
+			font-size:20px;
+			text-align: center;
+		}
+		.big-text {
+			font-family: Helvetica;
+			font-size: 30px;
+			font-weight: bold;
+			fill: darkblue;
+		}
+		.area {
+			opacity: 0.8;
+		}
+		.line {
+			fill: none;
+			stroke: black;
+			stroke-width: 1.75;
+		}
+		.stop-bottom {
+            stop-color: #aed4ff;
+        }
+        .stop-top {
+            stop-color: #fff;
+        }
+        .stop-dark {
+            stop-color: #abcdef;
+        }
+        .stop-light {
+            stop-color: #fff;
+        }
+        .filled {
+            fill: url(#bgGradient);
+        }
+        .onoffswitch {
+		    position: relative; width: 120px;
+		}
+		.onoffswitch-checkbox {
+		    display: none;
+		}
+		.onoffswitch-label {
+		    display: block; overflow: hidden; cursor: pointer;
+		    border: 2px solid #FFFFFF; border-radius: 20px;
+		}
+		.onoffswitch-inner {
+		    display: block; width: 200%; margin-left: -100%;
+		    transition: margin 0.3s ease-in 0s;
+		}
+		.onoffswitch-inner:before, .onoffswitch-inner:after {
+		    display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;
+		    font-size: 16px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;
+		    box-sizing: border-box;
+		}
+		.onoffswitch-inner:before {
+		    content: "High Price";
+		    padding-left: 10px;
+		    background-color: #CF5353; color: #FFFFFF;
+		    text-align: left;
+		}
+		.onoffswitch-inner:after {
+		    content: "Start Price";
+		    padding-right: 10px;
+		    background-color: #5F84C7; color: #FFFFFF;
+		    text-align: right;
+		}
+		.onoffswitch-switch {
+		    display: block; width: 15px; margin: 7.5px;
+		    background: #FFFFFF;
+		    position: absolute; top: 0; bottom: 0;
+		    right: 86px;
+		    border: 2px solid #FFFFFF; border-radius: 20px;
+		    transition: all 0.3s ease-in 0s; 
+		}
+		.onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-inner {
+		    margin-left: 0;
+		}
+		.onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-switch {
+		    right: 0px; 
+		}
+  	</style>
+</head>
+<body>
+	<h1>Estate of Thailand</h1>
+	<section id="map"></section><section id="graph"></section>
+	<br>
+	<div>
+		<button type="button" value=1 onclick="toggle(this)"> Select All </button>
+		<button type="button" value=0 onclick="toggle(this)"> Select None </button>
+		<input type="checkbox" id="myCheckbox" value="คอนโดมิเนียม" checked> คอนโดมิเนียม
+		<input type="checkbox" id="myCheckbox" value="ทาวน์โฮม" checked> ทาวน์โฮม
+		<input type="checkbox" id="myCheckbox" value="บ้านเดี่ยว" checked> บ้านเดี่ยว
+		<input type="checkbox" id="myCheckbox" value="โฮมออฟฟิศ" checked> โฮมออฟฟิศ
+		<input type="checkbox" id="myCheckbox" value="บ้านแฝด" checked> บ้านแฝด
+	</div>
+	<center>
+	<div class="onoffswitch">
+	    <input type="checkbox" name="onoffswitch" class="onoffswitch-checkbox" id="myonoffswitch" onclick="changeMode(this)" unchecked>
+	    <label class="onoffswitch-label" for="myonoffswitch">
+	        <span class="onoffswitch-inner"></span>
+	        <span class="onoffswitch-switch"></span>
+	    </label>
+	</div>
+	</center>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<script>
+		var widthMap = 450, width = 810,height = 560,padding=60,centered;
+		function toggle(d) {
+			d3.selectAll("#myCheckbox")
+				.property("checked", d.getAttribute("value") == 1);
+			for (type of types.keys()) {
+				types.set(type, d.getAttribute("value"));
+			}
+			updatePrice();
+			updateData();
+			updateAvg();
+		}
+		var types = new Map([["คอนโดมิเนียม",1],["ทาวน์โฮม",1],["บ้านเดี่ยว",1],["โฮมออฟฟิศ",1],["บ้านแฝด",1]]);
+		d3.selectAll("#myCheckbox").on("change",update);
+		function update() {
+			if (types.get(this.value) == 0) {
+				types.set(this.value, 1);
+			} else {
+				types.set(this.value, 0);
+			}
+			updatePrice();
+			updateData();
+			updateAvg();
+		}
+		var mode = "low";
+		function changeMode(d) {
+			if (mode == "low")
+				mode = "high";
+			else
+				mode = "low";
+			updatePrice();
+			updateData();
+			updateAvg();
+		}
+		// Mapping province to json
+		var province = new Map([["กรุงเทพมหานคร","Bangkok"],["นนทบุรี","Nonthaburi"],["ปทุมธานี","PathumThani"],["ชลบุรี","ChonBuri"],["เชียงใหม่","ChiangMai"],["สงขลา","Songkhla"],["สมุทรปราการ","SamutPrakarn"],["สมุทรสาคร","SamutSakhon"],["นครปฐม","NakhonPathom"],["ภูเก็ต","Phuket"],["ประจวบคีรีขันธ์","PrachuapKhilikhan"],["สุราษฎร์ธานี","SuratThani"],["นครราชสีมา","NakhonRatchasima"],["เพชรบุรี","Phetchaburi"],["พระนครศรีอยุธยา","PhraNakhonSiAyudhya"],["ฉะเชิงเทรา","Chachoengsao"],["ขอนแก่น","KhonKaen"],["กระบี่","Krabi"],["ระยอง","Rayong"],["เชียงราย","ChiangRai"],["เพชรบูรณ์","Phetchabun"],["สระบุรี","Saraburi"],["พิษณุโลก","Phitsanulok"],["อุดรธานี","UdonThani"],["ราชบุรี","Ratchaburi"],["ลำพูน","Lamphun"],["ลพบุรี","LopBuri"],["ตรัง","Trang"],["กาญจนบุรี","Kanchanaburi"],["แพร่","Phrae"],["นครนายก","NakhonNayok"],["นครสวรรค์","NakhonSawan"],["สุพรรณบุรี","SuphanBuri"],["ชุมพร","Chumphon"],["บุรีรัมย์","BuriRam"],["กำแพงเพชร","KampaengPhet"],["สมุทรสงคราม","SamutSongkham"],["จันทบุรี","Chanthaburi"],["ตราด","Trad"],["ตาก","Tak"],["จันทบุรี","Chanthaburi"],["นครศรีธรรมราช","NakhonSiThammarat"],["น่าน","Nan"],["ปราจีนบุรี","Phachinburi"],["พะเยา","Phayao"],["มหาสารคาม","MahaSarakham"],["ร้อยเอ็ด","RoiEt"],["ลำปาง","Lampang"],["เลย","Loei"],["สกลนคร","SakonNakhon"],["สระแก้ว","SaKaeo"],["สุรินทร์","Surin"],["หนองคาย","NongKhai"],["อำนาจเจริญ","AmnatCharoen"],["อุบลราชธานี","UbonRatchathani"]]);
+		var provinceS = new Map();
+		for (var key of province.keys()) {
+			provinceS.set(province.get(key), key);
+		}
+		// Load data
+		var data;
+		d3.csv("ProjectData_v02.csv", function(error, d) {
+			if(error) console.error(error);
+			data = d;
+			data.forEach(function(d, i) {
+				d.StartPrice = +d.StartPrice;
+				d.HighPrice = +d.HighPrice;
+			});
+			index = data.length - 1;
+			while (index >= 0) {
+				if (data[index].StartPrice > 30000000 || data[index].StartPrice <= 100000 || data[index].HighPrice > 30000000) {
+					data.splice(index, 1);
+				}
+				index--;
+			}
+			var xValue = function(d) { return Date.parse(d.BuiltDate.substring(0,10)); },
+				xScale = d3.scaleTime()
+					.domain([d3.min(data, xValue)-15000000000,d3.max(data, xValue)])
+					.range([padding, width - padding]),
+				xMap = function(d) { return xScale(xValue(d)); };
+			var yValueLow = function(d) { return d.StartPrice > 30000000? 30000000: d.StartPrice; },
+				yScaleLow = d3.scaleLinear()
+					.domain([d3.min(data, yValueLow),d3.max(data, yValueLow)])
+					.range([height - padding, padding]),
+				yMapLow = function(d) { return yScaleLow(yValueLow(d)); };
+
+			var colorValueLow = function(d) { return d.StartPrice > 30000000? 30000000: d.StartPrice; },
+				colorScaleLow = d3.scaleLinear()
+					.domain([d3.min(data, colorValueLow),
+							d3.max(data, colorValueLow)])
+					.range(["dodgerblue", "red"]),
+				colorMapLow = function(d) { return colorScaleLow(colorValueLow(d)); };
+
+			canvas.append("g").selectAll("circle").data(data)
+				.enter()
+				.append("circle")
+				.transition()
+			  	.ease(d3.easeElastic)
+			  	.duration(1500)
+				.attr("cx", xMap)
+				.attr("cy", yMapLow)
+				.attr("r", 1.76)
+				.attr("fill", colorMapLow)
+				.attr("opacity", function(d) {
+			    		if (d.StartPrice <= 0)
+			    			return 0;
+			    	})
+				.attr("id", "rawLow");
+
+			var yValueHigh = function(d) { return d.HighPrice > 30000000? 30000000: d.HighPrice; },
+				yScaleHigh = d3.scaleLinear()
+					.domain([d3.min(data, yValueHigh),d3.max(data, yValueHigh)])
+					.range([height - padding, padding]),
+				yMapHigh = function(d) { return yScaleHigh(yValueHigh(d)); };
+
+			var colorValueHigh = function(d) { return d.HighPrice > 30000000? 30000000: d.HighPrice; },
+				colorScaleHigh = d3.scaleLinear()
+					.domain([d3.min(data, colorValueHigh),
+							d3.max(data, colorValueHigh)])
+					.range(["dodgerblue", "red"]),
+				colorMapHigh = function(d) { return colorScaleHigh(colorValueHigh(d)); };
+
+			canvas.append("g").selectAll("circle").data(data)
+				.enter()
+				.append("circle")
+				.transition()
+			  	.ease(d3.easeElastic)
+			  	.duration(1500)
+				.attr("cx", xMap)
+				.attr("cy", yMapHigh)
+				.attr("r", 1.76)
+				.attr("fill", colorMapHigh)
+				.attr("opacity", 0)
+				.attr("id", "rawHigh");
+
+			updatePrice();
+			updateData();
+			updateAvg();
+		});
+		var mean, minAvg, maxAvg;
+		function updatePrice() {
+			mean = new Map();
+			var price = new Map();
+			var count = new Map();
+		   	data.forEach(function(d) {
+		   		if(typeof price.get(d.Province) == "undefined") {
+		   			price.set(d.Province,0);
+		   			count.set(d.Province,0);
+		   		}
+		   		var p;
+		   		if (mode == "low")
+		   			p = d.StartPrice;
+		   		else
+		   			p = d.HighPrice;
+		   		if(p > 0) {
+		   			for (var type of types.keys()) {
+	   					if (types.get(type) == 1 && d.Type.includes(type)) {
+	   						price.set(d.Province,price.get(d.Province) + p);
+	   						count.set(d.Province,count.get(d.Province) + 1);
+	   					}
+	   				}
+	   			}
+			});
+			minAvg = Infinity;
+			maxAvg = -Infinity;
+			for (var key of price.keys()) {
+				if(count.get(key) == 0)
+					continue;
+				var avg = price.get(key)/count.get(key);
+				minAvg = minAvg < avg? minAvg: avg;
+				maxAvg = maxAvg > avg? maxAvg: avg;
+				mean.set(key, avg);
+			}
+			if (mapLayer != null) {
+				mapLayer.selectAll('path').style("fill", function(d) { return fillFn(d); });
+		    }
+		    if (centered) {
+		    	bigText.text(nameFn(centered));
+		  	} else {
+		    	bigText.text("Province");
+		  	}
+		}
+		function updateData() {
+			if (mode == "low") {
+				d3.selectAll("#rawLow")
+					.transition()
+				  	.ease(d3.easeBounce)
+				  	.duration(1500)
+			    	.attr("opacity", function(d) {
+			    		if (d.StartPrice <= 0)
+			    			return 0;
+			    		var chk = false;
+			    		for (var type of types.keys()) {
+			    			if (types.get(type) == 1 && d.Type.includes(type)) {
+			    				chk = true;
+			    				break;
+			    			}
+			    		}
+						if (centered == null)
+							return chk == true? 0.7: 0;
+						else if (province.get(d.Province) == centered.properties.name && chk == true)
+							return 0.7;
+						else
+							return 0;
+					});
+				d3.selectAll("#rawHigh")
+					.transition()
+				  	.ease(d3.easeBounce)
+				  	.duration(1500)
+			    	.attr("opacity", 0);
+			} else {
+				d3.selectAll("#rawHigh")
+					.transition()
+				  	.ease(d3.easeBounce)
+				  	.duration(1500)
+			    	.attr("opacity", function(d) {
+			    		if (d.HighPrice <= 0)
+			    			return 0;
+			    		var chk = false;
+			    		for (var type of types.keys()) {
+			    			if (types.get(type) == 1 && d.Type.includes(type)) {
+			    				chk = true;
+			    				break;
+			    			}
+			    		}
+						if (centered == null)
+							return chk == true? 0.7: 0;
+						else if (province.get(d.Province) == centered.properties.name && chk == true)
+							return 0.7;
+						else
+							return 0;
+					});
+				d3.selectAll("#rawLow")
+					.transition()
+				  	.ease(d3.easeBounce)
+				  	.duration(1500)
+			    	.attr("opacity", 0);
+			}
+		}
+		// Define color scale
+		var color = d3.scaleLinear()
+		  	.domain([0, 1])
+		  	.range(["#0099F7", "#F11712"]);
+		var svg = d3.select("#map")
+			.append("svg")
+			.attr("width", widthMap)
+			.attr("height", height);
+		// Add background
+		var bgGradient = svg.append('linearGradient')
+            .attr('id', 'bgGradient')
+            .attr('x1','0').attr('y1','0')
+            .attr('x2','0').attr('y2','1');
+        bgGradient.append('stop')
+            .attr('class', 'stop-top')
+            .attr('offset', '0');
+        bgGradient.append('stop')
+            .attr('class', 'stop-bottom')
+            .attr('offset', '1');
+		svg.append('rect')
+		  	.classed('filled', true)
+			.attr('width', widthMap)
+		    .attr('height', height)
+			.on('click', clicked);
+		var g = svg.append('g');
+		var mapLayer = g.append('g')
+  			.classed('map-layer', true);
+  		svg.append('rect')
+  			.attr('width', widthMap)
+		    .attr('height', 45)
+		    .attr('fill-opacity',0.8)
+		    .attr('fill','white');
+  		var bigText = svg.append('text')
+			.classed('big-text', true)
+			.attr('x',20).attr('y',33)
+			.text("Province");
+		var xym = d3.geoMercator();
+		var path = d3.geoPath().projection(xym);
+		// Customize the projection to make the center of Thailand become the center of the map
+		xym.rotate([-100.6331, -13.2]);
+		xym.translate([widthMap / 2, height / 2]);
+		xym.scale(2000);
+		d3.json("thailandwithdensity.json", function(data) {
+		  	mapLayer.selectAll("path")
+		  		.data(data.features)
+			    .enter()
+			    .append("path")
+			    .attr("d", path)
+			    .attr('vector-effect', 'non-scaling-stroke')
+			    .attr("stroke","white")
+			    .attr("stroke-width",0.3)
+			    .style("fill", fillFn)
+			    .on("mouseover", mouseover)
+			    .on("mouseout", mouseout)
+			    .on("click", clicked)
+		});
+		// Get province name
+		function nameFn(d){
+		  	return d && d.properties ? d.properties.name: "Province";
+		}
+		// Get province color
+		function fillFn(d){
+			avg = avgFn(d);
+		  	return 0 <= avg && avg <= 1? color(avg): "black";
+		}
+		// Get province mean 
+		function avgFn(d){
+		  	avg = d && d.properties ? mean.get(provinceS.get(d.properties.name)) : null;
+		  	return (avg - minAvg) / (maxAvg - minAvg);
+		}
+		function mouseover(d){
+		  	d3.select(this).style('fill', '#f90');
+		  	bigText.text(nameFn(d));
+		}
+		function mouseout(d){
+		  	d3.select(this).style("fill", fillFn(d));
+		  	// Reset province color
+		  	mapLayer.selectAll('path')
+		    	.style('stroke', function(d){return centered && d===centered ? 'gold' : "white";})
+	    		.style('stroke-width', function(d){return centered && d===centered ? 4 : 0.3;});
+		  	//bigText.text('');
+		  	if (centered) {
+		    	bigText.text(nameFn(centered));
+		  	} else {
+		    	bigText.text("Province");
+		  	}
+		}
+		// When clicked, zoom in
+		function clicked(d) {
+		  	var x, y, k;
+		  	// Compute centroid of the selected path
+		  	if (d && centered !== d) {
+			    var centroid = path.centroid(d);
+			    x = centroid[0];
+			    y = centroid[1];
+			    k = 4;
+			    centered = d;
+			    provinceText.text(d.properties.name);
+		  	} else {
+			    x = widthMap / 2;
+			    y = height / 2;
+			    k = 1;
+			    centered = null;
+			    bigText.text("Province");
+			    provinceText.text("Thailand");
+		  	}
+		 	// Highlight the clicked province
+		  	mapLayer.selectAll('path')
+		    	.style('stroke', function(d){return centered && d===centered ? 'gold' : "white"})
+		    	.style('stroke-width', function(d){return centered && d===centered ? 4 : 0.3;});
+			// Zoom
+			g.transition()
+			    .duration(750)
+	    		.attr('transform', 'translate(' + widthMap / 2 + ',' + height / 2 + ')scale(' + k + ')translate(' + -x + ',' + -y + ')');
+	    	updateData();
+		  	updateAvg();
+		}
+		var canvas = d3.select("#graph")
+			.append("svg")
+			.attr("width", width)
+			.attr("height", height);
+		canvas.append('rect')
+		  	.classed('filled', true)
+			.attr('width', width)
+		    .attr('height', height);
+		var provinceText = canvas.append('text')
+			.attr("text-anchor", "middle")
+			.attr("font-size", 30)
+			.attr("x",width/2)
+			.attr("y",60)
+			.style("fill", "darkblue")
+			.text("Thailand");
+		var dataAvg,bandsData;
+		function updateAvg() {
+			var n=3,k=2;
+			var xScale = d3.scaleTime()
+					.range([padding, width-padding]);
+  			var yScale = d3.scaleLinear()
+					.range([height-padding, padding]);
+			var parseDate = d3.timeParse("%Y/%m/%d");
+			var ma = d3.line().curve(d3.curveBasis)
+          		.x(function(d) { return xScale(d.date); })
+          		.y(function(d) { return yScale(d.ma); });
+  			var lowBand = d3.line().curve(d3.curveBasis)
+          		.x(function(d) { return xScale(d.date); })
+          		.y(function(d) { return yScale(d.low); });
+  			var highBand = d3.line().curve(d3.curveBasis)
+          		.x(function(d) { return xScale(d.date); })
+          		.y(function(d) { return yScale(d.high); });
+          	var bandsAreaTop = function(datum, boolean) {
+          		return d3.area().curve(d3.curveBasis)
+          				.y0(function(d) { return yScale(d.low); })
+          				.y1(function(d) { return yScale(d.high); })
+          				.x(function(d) { return boolean?xScale(d.date):0; })
+          		(datum);
+          	}
+          	dataAvg = [];
+			var price = new Map();
+			var count = new Map();
+			data.forEach(function(d) {
+		        var year = d.BuiltDate.substring(0, 4);
+		   		if(typeof price.get(year) == "undefined") {
+		   			price.set(year,0);
+		   			count.set(year,0);
+		   		}
+		   		var chk = false;
+	    		for (var type of types.keys()) {
+	    			if (types.get(type) == 1 && d.Type.includes(type)) {
+	    				chk = true;
+	    				break;
+	    			}
+	    		}
+	    		var p;
+	    		if (mode == "low")
+	    			p = d.StartPrice;
+	    		else
+	    			p = d.HighPrice;
+	    		var valid = false;
+	    		if (p <= 0)
+  					valid = false;
+	    		else if (centered == null && p > 0)
+	    			valid = chk;
+				else if (province.get(d.Province) == centered.properties.name && chk == true && p > 0)
+					valid = true;
+				else
+					valid = false;
+		   		if(valid) {
+					price.set(year,price.get(year) + p);
+					count.set(year,count.get(year) + 1);
+			   	}
+			});
+			for (var key of price.keys()) {
+				if (count.get(key) != 0) {
+					var obj = {year: key, avg: price.get(key)/count.get(key)};
+					dataAvg.push(obj);
+				}
+			}
+			dataAvg.sort(function(a, b) { return a.year > b.year; });
+		    bandsData = getBB(n, k, dataAvg);
+		    xScale.domain(d3.extent(dataAvg, function(d) { return d.year; }));
+      		yScale.domain([d3.min(bandsData, function(d) { return d.low; }),
+               d3.max(bandsData, function(d) { return d.high; })]);
+      		canvas.selectAll(".area").remove();
+      		canvas.selectAll(".avg").remove();
+      		canvas.selectAll(".line").remove();
+      		canvas.selectAll(".axis").remove();
+			canvas.append("g")
+			  .attr("class", "axis")
+			  .attr("transform", "translate(0," + (height - padding) + ")")
+			  .call(d3.axisBottom(xScale)
+			  	.tickFormat(d3.format("d")));
+			// Add the Y Axis
+			canvas.append("g")
+			  .attr("class", "axis")
+			  .attr("transform", "translate(" + padding + ",0)")
+			  .call(d3.axisLeft(yScale)
+			  	.ticks(5));
+      		var totalLength = 0;
+      		var graphGradient = svg.append('linearGradient')
+	            .attr('id', 'graphGradientTop')
+	            .attr('x1','0').attr('y1','0')
+	            .attr('x2','0').attr('y2','1');
+	        graphGradient.append('stop')
+	            .attr('class', 'stop-light')
+	            .attr('offset', '0');
+	        graphGradient.append('stop')
+	            .attr('class', 'stop-dark')
+	            .attr('offset', '1');
+      		canvas.append("path")
+              	.datum(bandsData)
+              	.attr("class", "area")
+              	.attr("d",  d => bandsAreaTop(d, false))
+              	.attr("fill", "url(#graphGradientTop)")
+			    .transition()
+			    .duration(2000)
+			    .attr("d", d => bandsAreaTop(d, true));
+		    var lb = canvas.append("path")
+	            .datum(bandsData)
+              	.attr("class", "line")
+              	.attr("d", lowBand);
+            totalLength = lb.node().getTotalLength();
+           	lb.attr("stroke-dasharray", totalLength + " " + totalLength)
+		        .attr("stroke-dashoffset", totalLength)
+		        .transition()
+		        	.duration(2000)
+		          	.ease(d3.easeLinear)
+		          	.attr("stroke-dashoffset", 0);
+      		var hb = canvas.append("path")
+              	.datum(bandsData)
+              	.attr("class", "line")
+              	.attr("d", highBand);
+            totalLength = hb.node().getTotalLength();
+           	hb.attr("stroke-dasharray", totalLength + " " + totalLength)
+		        .attr("stroke-dashoffset", totalLength)
+		        .transition()
+		        	.duration(2000)
+		          	.ease(d3.easeLinear)
+		          	.attr("stroke-dashoffset", 0);
+      		var mb = canvas.append("path")
+              	.datum(bandsData)
+              	.attr("class", "line")
+              	.attr("d", ma);
+            totalLength = mb.node().getTotalLength();
+           	mb.attr("stroke-dasharray", totalLength + " " + totalLength)
+		        .attr("stroke-dashoffset", totalLength)
+		        .transition()
+		        	.duration(2000)
+		          	.ease(d3.easeLinear)
+		          	.attr("stroke-dashoffset", 0);
+		}
+		function getBB(n, k, data) {
+	        var bands = [];
+	        for (var i = n - 1, len = data.length; i < len; i++) {
+	            var slice = data.slice(i + 1 - n , i);
+	            var mean = d3.mean(slice, function(d) { return d.avg; });
+	            var stdDev = Math.sqrt(d3.mean(slice.map(function(d) {
+	                return Math.pow(d.avg - mean, 2);
+	            })));
+	            bands.push({ date: data[i].year,
+	                        ma: mean,
+	                        low: mean - (k * stdDev),
+	                        high: mean + (k * stdDev) });
+	        }
+	        return bands;
+		}
+	</script>
+</body>
+</html>
